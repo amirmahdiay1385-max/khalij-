@@ -1,0 +1,43 @@
+
+
+from pathlib import Path
+
+import pandas as pd
+from sklearn.ensemble import IsolationForest
+
+DATA_FILE = Path(__file__).resolve().parent / "reformer_data.csv"
+
+FEATURES = [
+    "reformer_temperature_C",
+    "reformer_pressure_bar",
+    "steam_to_carbon_ratio",
+    "catalyst_activity_pct",
+]
+
+if not DATA_FILE.exists():
+    raise FileNotFoundError(
+        "reformer_data.csv not found. Run reformer_data.py first."
+    )
+
+data = pd.read_csv(DATA_FILE)
+
+# Demonstration model only; not a validated industrial detector.
+model = IsolationForest(
+    n_estimators=100,
+    contamination=0.02,
+    random_state=42,
+)
+
+data["anomaly_label"] = model.fit_predict(data[FEATURES])
+data["is_anomaly"] = data["anomaly_label"] == -1
+
+output_file = DATA_FILE.parent / "reformer_anomalies.csv"
+data.to_csv(output_file, index=False)
+
+print("Khalij-ARML anomaly analysis complete.")
+print(f"Rows analyzed: {len(data)}")
+print(f"Potential anomalies: {int(data['is_anomaly'].sum())}")
+print(f"Results saved to: {output_file}")
+print("\nSample results:")
+print(data[FEATURES + ["is_anomaly"]].head(10).to_string(index=False))
+
