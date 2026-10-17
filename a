@@ -1,0 +1,203 @@
+
+
+
+import pandas as pd
+import streamlit as st
+
+from pathlib import Path
+
+st.set_page_config(
+    page_title="Khalij-ARML",
+    page_icon="🏭",
+    layout="wide",
+)
+
+st.title("Khalij-ARML")
+st.subheader("Methanol Plant Digital Twin")
+st.caption("Prototype dashboard — synthetic data only")
+
+data_file = Path(__file__).resolve().parent / "reformer_data.csv"
+
+if not data_file.exists():
+    st.error("reformer_data.csv not found. Run reformer_data.py first.")
+    st.stop()
+
+data = pd.read_csv(data_file)
+
+# Load anomaly detection results
+anomaly_file = Path(__file__).resolve().parent / "reformer_anomalies.csv"
+
+if anomaly_file.exists():
+    anomaly_data = pd.read_csv(anomaly_file)
+
+    if "timestamp" in anomaly_data.columns:
+        anomaly_data["timestamp"] = pd.to_datetime(
+            anomaly_data["timestamp"]
+        )
+
+    if "is_anomaly" in anomaly_data.columns:
+        anomaly_data["is_anomaly"] = (
+            anomaly_data["is_anomaly"]
+            .astype(str)
+            .str.lower()
+            .eq("true")
+        )
+
+required_columns = [
+    "timestamp",
+    "reformer_temperature_C",
+    "reformer_pressure_bar",
+    "steam_to_carbon_ratio",
+    "catalyst_activity_pct",
+]
+
+
+
+missing = [col for col in required_columns if col not in data.columns]
+
+if missing:
+    st.error(f"Missing columns: {', '.join(missing)}")
+    st.stop()
+
+data["timestamp"] = pd.to_datetime(data["timestamp"])
+data = data.sort_values("timestamp")
+
+st.sidebar.header("Dashboard Filters")
+
+start_date = st.sidebar.date_input(
+    "Start date",
+    value=data["timestamp"].min().date(),
+    min_value=data["timestamp"].min().date(),
+    max_value=data["timestamp"].max().date(),
+)
+
+end_date = st.sidebar.date_input(
+    "End date",
+    value=data["timestamp"].max().date(),
+    min_value=data["timestamp"].min().date(),
+    max_value=data["timestamp"].max().date(),
+)
+
+if start_date > end_date:
+    st.error("Start date must be before or equal to end date.")
+    st.stop()
+
+filtered = data[
+    (data["timestamp"].dt.date >= start_date)
+    & (data["timestamp"].dt.date <= end_date)
+].copy()
+
+if filtered.empty:
+    st.warning("No data available for the selected dates.")
+    st.stop()
+
+parameter = st.sidebar.selectbox(
+    "Chart parameter",
+    options=[
+        "reformer_temperature_C",
+        "reformer_pressure_bar",
+        "steam_to_carbon_ratio",
+        "catalyst_activity_pct",
+    ],
+    format_func=lambda name: {
+        "reformer_temperature_C": "Reformer Temperature (°C)",
+        "reformer_pressure_bar": "Reformer Pressure (bar)",
+        "steam_to_carbon_ratio": "Steam / Carbon Ratio",
+        "catalyst_activity_pct": "Catalyst Activity (%)",
+    }[name],
+)
+
+latest = filtered.iloc[-1]
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric(
+    "Temperature",
+    f"{latest['reformer_temperature_C']:.1f} °C",
+)
+
+c2.metric(
+    "Pressure",
+    f"{latest['reformer_pressure_bar']:.2f} bar",
+)
+
+c3.metric(
+    "Steam / Carbon",
+    f"{latest['steam_to_carbon_ratio']:.2f}",
+)
+
+c4.metric(
+    "Catalyst Activity",
+    f"{latest['catalyst_activity_pct']:.1f}%",
+)
+
+st.divider()
+
+st.subheader("Selected Parameter Trend")
+
+chart = filtered.set_index("timestamp")[[parameter]]
+st.line_chart(chart)
+
+st.subheader("Summary Statistics")
+
+stats = filtered[required_columns[1:]].describe().T
+st.dataframe(stats.round(2), use_container_width=True)
+
+st.divider()
+
+st.subheader("Experimental Anomaly Detection")
+
+if anomaly_file.exists() and "is_anomaly" in anomaly_data.columns:
+    anomaly_rows = anomaly_data[
+        anomaly_data["is_anomaly"]
+    ].copy()
+
+    if "timestamp" in anomaly_rows.columns:
+        anomaly_rows = anomaly_rows[
+            (anomaly_rows["timestamp"].dt.date >= start_date)
+            & (anomaly_rows["timestamp"].dt.date <= end_date)
+        ]
+
+    st.metric(
+        "Potential anomalies in selected dates",
+        len(anomaly_rows),
+    )
+
+    if anomaly_rows.empty:
+        st.success("No anomalies were flagged in this date range.")
+    else:
+        st.warning(
+            "These are model-flagged records, not confirmed equipment faults."
+        )
+        st.dataframe(
+            anomaly_rows,
+            use_container_width=True,
+            hide_index=True,
+        )
+else:
+    st.info(
+        "Anomaly results not found. Run anomaly_detection.py first."
+    )
+
+st.subheader("Filtered Process Data")
+
+st.dataframe(
+    filtered,
+    use_container_width=True,
+    hide_index=True,
+)
+
+csv_data = filtered.to_csv(index=False).encode("utf-8")
+
+st.download_button(
+    label="Download filtered data (CSV)",
+    data=csv_data,
+    file_name="khalij_arml_filtered.csv",
+    mime="text/csv",
+)
+
+st.info(
+    "This prototype uses synthetic data. "
+    "It is not connected to plant instruments and must not be used "
+    "for real process control, safety decisions, or equipment-life prediction."
+)
