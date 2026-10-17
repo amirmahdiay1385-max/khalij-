@@ -1,0 +1,44 @@
+
+
+import pandas as pd
+from pathlib import Path
+
+data_file = Path(__file__).resolve().parent / "reformer_data.csv"
+
+if not data_file.exists():
+    raise FileNotFoundError(
+        "reformer_data.csv not found. Run reformer_data.py first."
+    )
+
+data = pd.read_csv(data_file)
+
+# Educational example thresholds only.
+# These are NOT approved operating or safety limits.
+LIMITS = {
+    "reformer_temperature_C": (820, 880),
+    "reformer_pressure_bar": (27, 33),
+    "steam_to_carbon_ratio": (2.7, 3.3),
+    "catalyst_activity_pct": (90, 100),
+}
+
+print("=" * 55)
+print("Khalij-ARML | Reformer Monitoring Prototype")
+print("=" * 55)
+
+for column, (low, high) in LIMITS.items():
+    values = data[column]
+    out_of_range = (values < low) | (values > high)
+
+    print(f"\nParameter: {column}")
+    print(f"Allowed demo range: {low} to {high}")
+    print(f"Minimum observed: {values.min():.2f}")
+    print(f"Maximum observed: {values.max():.2f}")
+    print(f"Rows outside demo range: {int(out_of_range.sum())}")
+
+    if out_of_range.any():
+        print("DEMO ALERT: Some values are outside the example range.")
+    else:
+        print("Status: Within the example range.")
+
+print("\nMonitoring analysis complete.")
+
