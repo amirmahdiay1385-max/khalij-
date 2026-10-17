@@ -1,0 +1,49 @@
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
+
+# Locate the CSV beside this Python file
+data_file = Path(__file__).resolve().parent / "reformer_data.csv"
+
+if not data_file.exists():
+    raise FileNotFoundError(
+        f"Dataset not found: {data_file}\n"
+        "Run reformer_data.py first."
+    )
+
+data = pd.read_csv(data_file)
+
+print("=" * 45)
+print("Khalij-ARML - Reformer Data Analysis")
+print("=" * 45)
+
+print("\nDataset size:", data.shape)
+print("\nFirst five rows:")
+print(data.head())
+
+print("\nStatistical summary:")
+print(data[
+    [
+        "reformer_temperature_C",
+        "reformer_pressure_bar",
+        "steam_to_carbon_ratio",
+        "catalyst_activity_pct",
+    ]
+].describe().round(2))
+
+# Plot simulated reformer temperature
+plt.figure(figsize=(10, 5))
+plt.plot(
+    data["timestamp"],
+    data["reformer_temperature_C"],
+    linewidth=1
+)
+
+plt.title("Khalij-ARML - Simulated Reformer Temperature")
+plt.xlabel("Timestamp")
+plt.ylabel("Temperature (C)")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
